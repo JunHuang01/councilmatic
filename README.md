@@ -40,10 +40,34 @@ Non-Python requirements include:
 
 ### Legislation source
 
-Copy the file *councilmatic/local_settings.py.template* to
-*councilmatic/local_settings.py*.  Fill in the `LEGISLATION` setting in this
+Copy the file *local-councilmatic-sample/local_settings.py.template* to
+*local-councilmatic-sample/local_settings.py*.  Fill in the `LEGISLATION` setting in this
 file.  By default, it is set up to scrape from Philadelphia's legislation
 system.
+
+For example:
+
+    LEGISLATION = {
+        'SYSTEM': 'Granicus Legistar',
+        'ROOT': 'http://lexington.legistar.com/',
+        'ADDRESS_BOUNDS': [37.82714,-84.70459, 38.20797,-84.25964], # lat, lng, lat, lng
+        'ADDRESS_SUFFIX': ', Lexington, KY',
+
+        'SCRAPER': ('lexleg.management.scraper_wrappers.sources.'
+                    'hosted_legistar_scraper.HostedLegistarSiteWrapper'),
+        'SCRAPER_OPTIONS': {
+            'hostname': 'lexington.legistar.com',
+            'fulltext': True,        # Load and store full text from PDFs?
+            'sponsor_links': False,  # Are sponsor names in anchors/links?
+
+            # Label overrides
+            # ---------------
+            'id_label': 'File #',
+            'controlling_body_label': 'In control',
+            'intro_date_label': 'File Created',
+            'topics_label': 'Indexes',
+        },
+    }
 
 
 ### Database
@@ -72,7 +96,7 @@ while.
 
     cd local-councilmatic-sample
     mkdir ../logs
-    createuser -s -r cncl # Create the cncl role in PostgreSQL
+    createuser -s -r postgres # Create the postgres role in PostgreSQL
     python manage.py syncdb # Create admin account when prompted.
     python manage.py migrate
     python manage.py loadlegfiles # For first-time installs.
