@@ -47,7 +47,7 @@ To configure the scraper to load data for your city, open local_settings.py. Unc
   The root address of your city's legistar server. For example: `'http://phila.legistar.com/'`.
 
 * 'ADDRESS_BOUNDS'
-  
+
   A bounding box to give the geocoder a hint as to where addresses it finds should be located. This should be a list with four values, [lat1, lng1, lat2, lng2].
 
 * 'ADDRESS_SUFFIX'
@@ -61,7 +61,7 @@ To configure the scraper to load data for your city, open local_settings.py. Unc
   `'phillyleg.management.scraper_wrappers.sources.hosted_legistar_scraper.HostedLegistarSiteWrapper'`
 
 * 'SCRAPER_OPTIONS'
-  
+
   These will be passed in as keyword options to the `SCRAPER` class during construction.
 
 
@@ -69,7 +69,7 @@ To configure the scraper to load data for your city, open local_settings.py. Unc
 
 To actually import data from the legislation source, run the following:
 
-	python website/manage.py updatelegsfiles  # Load the legislation
+	python website/manage.py updatelegfiles  # Load the legislation
 	python website/manage.py update_index  # Update the search indexes
 
-Let the `updatelegfiles` command run for a couple of minutes, just to get some data to work with. 
+Let the `updatelegfiles` command run for a couple of minutes, just to get some data to work with.

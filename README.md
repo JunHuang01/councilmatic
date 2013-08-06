@@ -53,7 +53,7 @@ For example:
         'ADDRESS_BOUNDS': [37.82714,-84.70459, 38.20797,-84.25964], # lat, lng, lat, lng
         'ADDRESS_SUFFIX': ', Lexington, KY',
 
-        'SCRAPER': ('lexleg.management.scraper_wrappers.sources.'
+        'SCRAPER': ('phillyleg.management.scraper_wrappers.sources.'
                     'hosted_legistar_scraper.HostedLegistarSiteWrapper'),
         'SCRAPER_OPTIONS': {
             'hostname': 'lexington.legistar.com',
