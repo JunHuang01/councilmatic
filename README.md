@@ -14,7 +14,8 @@ First check out the project code.
     $ git clone git://github.com/codeforamerica/councilmatic.git
 
 To work on your own instance of Councilmatic, you should first get Python
-installed. Follow the instructions for doing so on your platform.
+installed. Follow the instructions for doing so on your platform. For example,
+[Mac OS X Mountain Lion 10.8](http://hackercodex.com/guide/python-virtualenv-on-mac-osx-mountain-lion-10.8/).
 
 In addition, we recommend setting up a virtual environment for working with any
 project, so that you can manage your project-specific dependencies.
@@ -22,7 +23,7 @@ project, so that you can manage your project-specific dependencies.
     $ cd councilmatic
     $ virtualenv .env --no-site-packages
     $ source .env/bin/activate
-    
+
 Next, install the requirements for Councilmatic (we recommend working in a
 virtual environment, but it's not strictly necessary).
 
@@ -35,7 +36,7 @@ Non-Python requirements include:
 
 ### Legislation source
 
-Copy the file *councilmatic/local_settings.py.template* to 
+Copy the file *councilmatic/local_settings.py.template* to
 *councilmatic/local_settings.py*.  Fill in the `LEGISLATION` setting in this
 file.  By default, it is set up to scrape from Philadelphia's legislation
 system.
@@ -49,11 +50,11 @@ Create a database for Councilmatic. Typically this is done like:
 
 where `template_postgis` is the name of your PostGIS database template. If you
 do not yet have one, you can find instructions for getting your system ready for
-Django and PostGIS online.  For example, here are instructions for 
+Django and PostGIS online.  For example, here are instructions for
 [Mac](https://gist.github.com/3188632), and
 [Ubuntu](http://brandonkonkle.com/blog/2010/jul/19/setting-template_postgis-lucid/).
-For other platforms, and for further instructions, the 
-[GeoDjango docs](https://docs.djangoproject.com/en/dev/ref/contrib/gis/install/#platform-specific-instructions) 
+For other platforms, and for further instructions, the
+[GeoDjango docs](https://docs.djangoproject.com/en/dev/ref/contrib/gis/install/#platform-specific-instructions)
 are a good place to look.
 
 **NOTE that PostGIS 2.0 is not compatible with Django 1.4.  As Councilmatic is
