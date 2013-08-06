@@ -75,10 +75,16 @@ while.
     createuser -s -r cncl # Create the cncl role in PostgreSQL
     python manage.py syncdb # Create admin account when prompted.
     python manage.py migrate
+    python manage.py loadlegfiles # For first-time installs.
     python manage.py updatelegfiles
     python manage.py rebuild_index # For searches. Say yes when prompted.
     python manage.py collectstatic # For js and css. Say yes when prompted.
 
+For example, loading the database for the first time:
+
+    (env)code/councilmatic/local-councilmatic-sample at owne-pc (master ✔)% python manage.py loadlegfiles
+    No local copy of database exists.
+    Downloading the database (~40M -- this may take a while)...
 
 ### Development server
 
