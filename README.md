@@ -31,6 +31,8 @@ virtual environment, but it's not strictly necessary).
 
     $ pip install -r requirements.txt
 
+This file might not fully finish installing; if you get a hang-up on `pdfminer`, try [installing it manually](http://www.unixuser.org/~euske/python/pdfminer/#download) then re-run `pip install -r requirements.txt`.
+
 Non-Python requirements include:
 
 * pdftotext and pdftohtml (use ``apt-get install poppler-utils`` on Ubuntu)
@@ -69,6 +71,8 @@ so). There is a lot of data to be loaded, so downloading it all may take a
 while.
 
     cd local-councilmatic-sample
+    mkdir ../logs
+    createuser -s -r cncl # Create the cncl role in PostgreSQL
     python manage.py syncdb # Create admin account when prompted.
     python manage.py migrate
     python manage.py updatelegfiles
