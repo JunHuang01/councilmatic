@@ -74,8 +74,6 @@ STATIC_ROOT = rel_path('..', 'static')
 STATIC_URL = '/static/'
 
 STATICFILES_DIRS = (
-    rel_path('customizations/static'),
-    rel_path('static'),
 )
 
 # List of finder classes that know how to find static files in
@@ -112,19 +110,16 @@ TEMPLATE_CONTEXT_PROCESSORS = (
     'django.contrib.messages.context_processors.messages',
     'django.core.context_processors.request',
 
-    'utils.context_processors.settings',
-    'utils.context_processors.site',
+    'councilmatic.utils.context_processors.settings',
+    'councilmatic.utils.context_processors.site',
 )
 
-ROOT_URLCONF = 'urls'
+ROOT_URLCONF = 'councilmatic.urls'
 
 TEMPLATE_DIRS = (
     # Put strings here, like "/home/html/django_templates" or
     # "C:/www/django/templates". Always use forward slashes, even on Windows.
     # Don't forget to use absolute paths, not relative paths.
-    rel_path('phillyleg'),
-    rel_path('customizations/templates'),
-    rel_path('templates'),
     
 )
 
@@ -143,11 +138,6 @@ MIDDLEWARE_CLASSES = (
 #
 
 AUTHENTICATION_BACKENDS = (
-    'social_auth.backends.twitter.TwitterBackend',
-    'social_auth.backends.facebook.FacebookBackend',
-    'social_auth.backends.google.GoogleBackend',
-    'social_auth.backends.contrib.linkedin.LinkedinBackend',
-    'social_auth.backends.OpenIDBackend',
     'django.contrib.auth.backends.ModelBackend',
 )
 
@@ -184,33 +174,29 @@ HAYSTACK_ITERATOR_LOAD_PER_QUERY = 800
 
 COMMUNITY_APPS = (
     'registration',
-    'captcha',
     'south',
     'haystack',
     'uni_form',
     'django_nose',
     'councilmatic.ebdata', # From everyblock -- used here for parsing addresses and such
     'compressor',
-    'djangorestframework',
+    'rest_framework',
     'debug_toolbar',
     'mustachejs',
 )
 
 COUNCILMATIC_APPS = (
     'councilmatic',
-    'cm',
-    'cm_api',
     'phillyleg',
     'subscriptions',
     'bookmarks',
     'activity_log',
     'opinions',
-    'main',
     'utils',
 )
 
 PROJECT_SPECIFIC_APPS = (
-    'sample',
+    'councilmatic_customizations',
 )
 
 INSTALLED_APPS = (
@@ -223,7 +209,7 @@ INSTALLED_APPS = (
     'django.contrib.staticfiles',
     'django.contrib.comments',
     'django.contrib.gis',
-) + COMMUNITY_APPS + COUNCILMATIC_APPS + PROJECT_SPECIFIC_APPS
+) + PROJECT_SPECIFIC_APPS + COUNCILMATIC_APPS + COMMUNITY_APPS
 
 ################################################################################
 #
@@ -236,7 +222,7 @@ SOUTH_TESTS_MIGRATE = False
 
 # Debugging
 DEBUG_TOOLBAR_CONFIG = {
-    'INTERCEPT_REDIRECTS': False,
+    'INTERCEPT_REDIRECTS': True,
     'SHOW_TOOLBAR_CONFIG': (lambda: DEBUG)
 }
 INTERNAL_IPS = ('127.0.0.1',)
@@ -255,9 +241,9 @@ LOGGING = {
     },
 
     'filters': {
-        'require_debug_false': {
+        'only_when_debug_is_false': {
             '()': 'django.utils.log.RequireDebugFalse'
-        },
+        }
     },
 
     'handlers': {
@@ -273,14 +259,14 @@ LOGGING = {
         'logfile':{
             'level':'DEBUG',
             'class':'logging.handlers.RotatingFileHandler',
-            'filename':'',  # OVERRIDE THIS VALUE!
+            'filename': rel_path('logs/councilmatic.log'),
             'formatter':'verbose',
         },
         'mail_admins': {
             'level': 'ERROR',
-            'filters': ['require_debug_false'],
             'class': 'django.utils.log.AdminEmailHandler',
             'include_html': True,
+            'filters': ['only_when_debug_is_false'],
         }
     },
 
@@ -291,16 +277,12 @@ LOGGING = {
             'level':'INFO',
         },
         'django.request': {
-            'handlers': ['logfile', 'mail_admins'],
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
         'councilmatic': {
-            'handlers': ['console', 'logfile', 'mail_admins'],
-            'level': 'DEBUG',
-        },
-        'phillyleg.management': {
-            'handlers': ['console', 'logfile', 'mail_admins'],
+            'handlers': ['console'],
             'level': 'DEBUG',
         },
     }

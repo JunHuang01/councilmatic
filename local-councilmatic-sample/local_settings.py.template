@@ -15,8 +15,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.contrib.gis.db.backends.postgis', # Add 'postgresql_psycopg2', 'postgresql', 'mysql', 'sqlite3' or 'oracle'.
         'NAME': 'councilmatic',                      # Or path to database file if using sqlite3.
-        'USER': 'cncl',                      # Not used with sqlite3.
-        'PASSWORD': 'cncl',                  # Not used with sqlite3.
+        'USER': 'postgres',                      # Not used with sqlite3.
+        'PASSWORD': 'postgres',                  # Not used with sqlite3.
         'HOST': 'localhost',                      # Set to empty string for localhost. Not used with sqlite3.
         'PORT': '5432',                      # Set to empty string for default. Not used with sqlite3.
     }
@@ -69,27 +69,27 @@ FOOTER_CONTENT = "An app by <a href='http://codeforamerica.org'>Code for America
 # Legistar hostname is something like <city>.legistar.com), your legislation
 # settings should look something like:
 #
-LEGISLATION = {
-    'SYSTEM': 'Granicus Legistar',
-    'ROOT': 'http://phila.legistar.com/',
-    'ADDRESS_BOUNDS': [39.874439,-75.29892, 40.141615,-74.940491], # lat, lng, lat, lng
-    'ADDRESS_SUFFIX': ', Philadelphia, PA',
- 
-    'SCRAPER': ('phillyleg.management.scraper_wrappers.sources.'
-                'hosted_legistar_scraper.HostedLegistarSiteWrapper'),
-    'SCRAPER_OPTIONS': {
-        'hostname': 'http://phila.legistar.com/',
-        'fulltext': True,        # Load and store full text from PDFs?
-        'sponsor_links': False,  # Are sponsor names in anchors/links?
-
-        # Label overrides
-        # --------------- 
-        'id_label': 'File #',
-        'controlling_body_label': 'In control',
-        'intro_date_label': 'File Created',
-    },
-}
-
+# LEGISLATION = {
+#     'SYSTEM': 'Granicus Legistar',
+#     'ROOT': 'http://phila.legistar.com/',
+#     'ADDRESS_BOUNDS': [39.874439,-75.29892, 40.141615,-74.940491], # lat, lng, lat, lng
+#     'ADDRESS_SUFFIX': ', Philadelphia, PA',
+# 
+#     'SCRAPER': ('phillyleg.management.scraper_wrappers.sources.'
+#                 'hosted_legistar_scraper.HostedLegistarSiteWrapper'),
+#     'SCRAPER_OPTIONS': {
+#         'hostname': 'phila.legistar.com',
+#         'fulltext': True,        # Load and store full text from PDFs?
+#         'sponsor_links': False,  # Are sponsor names in anchors/links?
+#
+#         # Label overrides
+#         # --------------- 
+#         'id_label': 'File #',
+#         'controlling_body_label': 'In control',
+#         'intro_date_label': 'File Created',
+#         'topics_label': 'Indexes',
+#     },
+# }
 
 ###############################################################################
 #
@@ -146,9 +146,9 @@ LOGGING = {
     },
 
     'filters': {
-        'require_debug_false': {
+        'only_when_debug_is_false': {
             '()': 'django.utils.log.RequireDebugFalse'
-        },
+        }
     },
 
     'handlers': {
@@ -169,9 +169,9 @@ LOGGING = {
         },
         'mail_admins': {
             'level': 'ERROR',
-            'filters': ['require_debug_false'],
             'class': 'django.utils.log.AdminEmailHandler',
             'include_html': True,
+            'filters': ['only_when_debug_is_false'],
         }
     },
 
@@ -182,16 +182,16 @@ LOGGING = {
             'level':'INFO',
         },
         'django.request': {
-            'handlers': ['logfile', 'mail_admins'],
+            'handlers': ['console'],
             'level': 'WARNING',
             'propagate': False,
         },
         'councilmatic': {
-            'handlers': ['console', 'logfile', 'mail_admins'],
+            'handlers': ['console'],
             'level': 'DEBUG',
         },
         'phillyleg.management': {
-            'handlers': ['console', 'logfile', 'mail_admins'],
+            'handlers': ['logfile', 'mail_admins'],
             'level': 'DEBUG',
         },
     }

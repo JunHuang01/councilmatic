@@ -5,13 +5,12 @@ from django.shortcuts import get_object_or_404
 from django.views import generic as views
 from django.core.cache import cache
 from django.core.urlresolvers import reverse_lazy
-from haystack.query import SearchQuerySet
+from haystack.query import SearchQuerySet, RelatedSearchQuerySet
 import datetime
 from datetime import timedelta
 
-from cm_api.resources import SubscriberResource
-from main import feeds
-from main import forms
+from . import feeds
+from . import forms
 from phillyleg.models import MetaData_Topic, LegFile, CouncilMember
 
 import haystack.views
@@ -84,7 +83,7 @@ class BaseDashboardMixin (SearchBarMixin,
                           bookmarks.views.BaseBookmarkMixin):
 
     def get_recent_legislation(self):
-        legfiles = self.get_filtered_legfiles().prefetch_related('metadata__topics')
+        legfiles = self.get_recent_legislation().prefetch_related('metadata__topics')
         return list(legfiles.exclude(metadata__topics__topic='Routine').order_by('-key')[:6])
 
     def get_context_data(self, **kwargs):
@@ -110,7 +109,7 @@ class AppDashboardView (BaseDashboardMixin,
                         views.TemplateView):
     template_name = 'councilmatic/dashboard.html'
 
-    def get_filtered_legfiles(self):
+    def get_recent_legislation(self):
         return phillyleg.models.LegFile.objects.exclude(title='')
 
     def get_recent_locations(self):
@@ -184,7 +183,7 @@ class CouncilMemberDetailView (BaseDashboardMixin,
     def get_content_feed(self):
         return feeds.SearchResultsFeed(search_filter={'sponsors': [self.object.name]})
 
-    def get_filtered_legfiles(self):
+    def get_recent_legislation(self):
         return self.object.legislation
 
     def get_district(self):
@@ -211,10 +210,18 @@ class CouncilMemberDetailView (BaseDashboardMixin,
 
 
 class SearcherMixin (object):
+    def get_search_queryset(self):
+        return RelatedSearchQuerySet().load_all_queryset(
+            phillyleg.models.LegFile,
+            phillyleg.models.LegFile.objects\
+                .exclude(title='')\
+                .prefetch_related('sponsors', 'metadata__topics', 'metadata__locations'))
+
     def _init_haystack_searchview(self, request):
         # Construct and run a haystack SearchView so that we can use the
         # resulting values.
-        self.search_view = haystack.views.SearchView(form_class=forms.FullSearchForm, searchqueryset=SearchQuerySet().exclude(title=''))
+        self.search_queryset = self.get_search_queryset()
+        self.search_view = haystack.views.SearchView(form_class=forms.FullSearchForm, searchqueryset=self.search_queryset)
         self.search_view.request = request
 
         self.search_view.form = self.search_view.build_form()
@@ -222,45 +229,26 @@ class SearcherMixin (object):
         self.search_view.results = self.search_view.get_results().order_by('-order_date')
 
     def _get_search_results(self, query_params):
+        class SQSProxy (object):
+            """
+            Make a SearchQuerySet look enough like a QuerySet for a ListView
+            not to notice the difference.
+            """
+            def __init__(self, sqs):
+                self.sqs = sqs
+            def __len__(self):
+                return len(self.sqs)
+            def __iter__(self):
+                return (result.object for result in self.sqs.load_all())
+            def __getitem__(self, key):
+                if isinstance(key, slice):
+                    return [result.object for result in self.sqs.load_all()[key] if result is not None]
+                else:
+                    return self.sqs[key].object
+
         if len(query_params) == 0:
-            search_queryset = phillyleg.models.LegFile.objects.all()\
-                .exclude(title='')\
-                .order_by('-key')\
-                .prefetch_related('metadata__locations', 'metadata__topics')
-
+            search_queryset = SQSProxy(self.search_queryset)
         else:
-            class SQSProxy (object):
-                """
-                Make a SearchQuerySet look enough like a QuerySet for a ListView
-                not to notice the difference.
-                """
-                def __init__(self, sqs):
-                    self.sqs = sqs
-                def __len__(self):
-                    return len(self.sqs)
-                def __iter__(self):
-                    return (result.object for result in self.sqs)
-                def __getitem__(self, key):
-                    if isinstance(key, slice):
-                        objs = [result.object for result in self.sqs[key] if result is not None]
-
-                        # Manually prefetch related metadata
-                        metadata = dict([
-                            (metadata.legfile_id, metadata)
-                             for metadata in phillyleg.models.LegFileMetaData.objects
-                                .filter(legfile__in=objs)
-                                .prefetch_related('locations', 'topics')])
-                        for obj in objs:
-                            obj.metadata = metadata[obj.key]
-
-                        return objs
-                    else:
-                        obj = self.sqs[key].object
-                        obj.metadata = phillyleg.models.LegFileMetaData.objects\
-                            .prefetch_related('locations', 'topics')\
-                            .get(legfile=obj)
-                        return obj
-
             search_queryset = SQSProxy(self.search_view.results)
         return search_queryset
 
@@ -428,18 +416,6 @@ class LegislationDetailView (SearchBarMixin,
 #        self.on_object_gotten(legfile)
 
 #        return legfile
-
-
-class BookmarkListView (SearchBarMixin,
-                        views.ListView):
-    template_name = 'main/bookmark_list.html'
-
-    def get_queryset(self):
-        user = self.request.user
-        if user.is_authenticated():
-            return [bm.content for bm in user.bookmarks.all()]
-        else:
-            return []
 
 
 def legfile_choices(field):
