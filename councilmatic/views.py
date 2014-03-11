@@ -1,10 +1,12 @@
 import json
 import logging as log
+from collections import defaultdict, namedtuple
 from django.contrib.syndication.views import Feed as DjangoFeed
 from django.shortcuts import get_object_or_404
 from django.views import generic as views
 from django.core.cache import cache
 from django.core.urlresolvers import reverse_lazy
+from django.utils.translation import ugettext as _
 from haystack.query import SearchQuerySet, RelatedSearchQuerySet
 import datetime
 from datetime import timedelta
@@ -83,8 +85,11 @@ class BaseDashboardMixin (SearchBarMixin,
                           bookmarks.views.BaseBookmarkMixin):
 
     def get_recent_legislation(self):
-        legfiles = self.get_recent_legislation().prefetch_related('metadata__topics')
-        return list(legfiles.exclude(metadata__topics__topic='Routine').order_by('-key')[:6])
+        legfiles = self.get_ordered_legislation() \
+            .exclude(metadata__topics__topic='Routine') \
+            .prefetch_related('metadata__topics') \
+            .order_by('-key')
+        return legfiles[:6]
 
     def get_context_data(self, **kwargs):
         search_form = forms.FullSearchForm()
@@ -109,8 +114,10 @@ class AppDashboardView (BaseDashboardMixin,
                         views.TemplateView):
     template_name = 'councilmatic/dashboard.html'
 
-    def get_recent_legislation(self):
-        return phillyleg.models.LegFile.objects.exclude(title='')
+    def get_ordered_legislation(self):
+        return phillyleg.models.LegFile.objects.all() \
+            .exclude(title='') \
+            .prefetch_related('metadata__topics')
 
     def get_recent_locations(self):
         return list(phillyleg.models.MetaData_Location.objects.\
@@ -150,27 +157,24 @@ class AppDashboardView (BaseDashboardMixin,
 class CouncilMembersView(views.TemplateView):
     template_name = 'councilmatic/councilmembers.html'
 
-    def get_councilmembers(self):
-        return phillyleg.models.CouncilMember.objects.\
-               filter(title__icontains='alderman').\
-               exclude(title__icontains='former').order_by('name')
+    def get_councilmember_groups(self):
+        cms = phillyleg.models.CouncilMember.objects.all() \
+            .prefetch_related('tenures') \
+            .order_by('real_name')
 
-    def get_former_councilmembers(self):
-        return phillyleg.models.CouncilMember.objects.\
-               filter(title__icontains='former').\
-               order_by('name')
+        district_cms = filter(lambda cm: cm.is_active and not cm.is_at_large, cms)
+        at_large_cms = filter(lambda cm: cm.is_active and cm.is_at_large, cms)
+        former_cms = filter(lambda cm: not cm.is_active, cms)
 
-    def get_other_councilmembers(self):
-        return phillyleg.models.CouncilMember.objects.\
-               exclude(title__icontains='former').exclude(title__icontains='alderman').\
-               order_by('name')
-
+        return [
+            (_('District'), 'district', district_cms),
+            (_('At Large'), 'at-large', at_large_cms),
+            (_('Former'), 'former', former_cms)
+        ]
 
     def get_context_data(self, **kwargs):
         context_data = super(CouncilMembersView, self).get_context_data(**kwargs)
-        context_data['councilmembers'] = self.get_councilmembers()
-        context_data['former_councilmembers'] = self.get_former_councilmembers()
-        context_data['other_councilmembers'] = self.get_other_councilmembers()
+        context_data['councilmember_groups'] = self.get_councilmember_groups()
         return context_data
 
 
@@ -181,10 +185,12 @@ class CouncilMemberDetailView (BaseDashboardMixin,
     template_name = 'councilmatic/councilmember_detail.html'
 
     def get_content_feed(self):
-        return feeds.SearchResultsFeed(search_filter={'sponsors': [self.object.name]})
+        return feeds.SearchResultsFeed(search_filter={'sponsors': [self.object.real_name]})
 
-    def get_recent_legislation(self):
-        return self.object.legislation
+    def get_ordered_legislation(self):
+        return self.object.legislation.all() \
+            .exclude(title='') \
+            .prefetch_related('metadata__topics')
 
     def get_district(self):
         return self.object.district
@@ -211,22 +217,26 @@ class CouncilMemberDetailView (BaseDashboardMixin,
 
 class SearcherMixin (object):
     def get_search_queryset(self):
-        return RelatedSearchQuerySet().load_all_queryset(
-            phillyleg.models.LegFile,
-            phillyleg.models.LegFile.objects\
-                .exclude(title='')\
-                .prefetch_related('sponsors', 'metadata__topics', 'metadata__locations'))
+        return SearchQuerySet()
 
-    def _init_haystack_searchview(self, request):
-        # Construct and run a haystack SearchView so that we can use the
+    def get_search_form_class(self):
+        return forms.FullSearchForm
+
+    def get_search_form(self, request):
+        FormClass = self.get_search_form_class()
+        qs = self.get_search_queryset()
+
+        data = request.GET
+
+        return FormClass(data, searchqueryset=qs, load_all=False)
+
+    def _init_haystack_search(self, request):
+        # Construct and run a haystack SearchForm so that we can use the
         # resulting values.
-        self.search_queryset = self.get_search_queryset()
-        self.search_view = haystack.views.SearchView(form_class=forms.FullSearchForm, searchqueryset=self.search_queryset)
-        self.search_view.request = request
 
-        self.search_view.form = self.search_view.build_form()
-        self.search_view.query = self.search_view.get_query()
-        self.search_view.results = self.search_view.get_results().order_by('-order_date')
+        # TODO: Check is_valid
+        self.form = self.get_search_form(request)
+        self.results = self.form.search().order_by('-order_date')
 
     def _get_search_results(self, query_params):
         class SQSProxy (object):
@@ -237,25 +247,45 @@ class SearcherMixin (object):
             def __init__(self, sqs):
                 self.sqs = sqs
             def __len__(self):
-                return len(self.sqs)
+                return self.sqs.count()
+            count = __len__
             def __iter__(self):
                 return (result.object for result in self.sqs.load_all())
             def __getitem__(self, key):
                 if isinstance(key, slice):
-                    return [result.object for result in self.sqs.load_all()[key] if result is not None]
+                    # Collect all the results in the slice, storing the id
+                    # and the model of the object.
+                    ResultSummary = namedtuple('ResultSummary', 'model id')
+                    results = [ResultSummary(result.model, str(result.file_id)) for result in
+                               self.sqs[key] if result is not None]
+
+                    # For each model, do a query for the objects of that model
+                    # type and map them by key.
+                    models = set([result.model for result in results])
+                    objs_by_id = {}
+                    for model in models:
+                        ids = [result.id for result in results if result.model is model]
+                        objs = model.objects.filter(id__in=ids)\
+                            .select_related('metadata')\
+                            .prefetch_related('metadata__topics')\
+                            .prefetch_related('metadata__locations')
+                        objs_by_id.update(
+                            {str(obj.id): obj for obj in objs}
+                        )
+
+                    # To preserve search query order, pull the objects out of
+                    # the map according to the order of the results.
+                    return [objs_by_id[result.id] for result in results if result.id in objs_by_id]
                 else:
                     return self.sqs[key].object
 
-        if len(query_params) == 0:
-            search_queryset = SQSProxy(self.search_queryset)
-        else:
-            search_queryset = SQSProxy(self.search_view.results)
-        return search_queryset
+        objs = SQSProxy(self.results)
+        return objs
 
 
 class LegFileListFeedView (SearcherMixin, DjangoFeed):
     def get_object(self, request, *args, **kwargs):
-        self._init_haystack_searchview(request)
+        self._init_haystack_search(request)
         query_params = request.GET.copy()
         search_queryset = self._get_search_results(query_params)
         return search_queryset
@@ -280,7 +310,7 @@ class SearchView (SearcherMixin,
     feed_data = None
 
     def dispatch(self, request, *args, **kwargs):
-        self._init_haystack_searchview(request)
+        self._init_haystack_search(request)
         return super(SearchView, self).dispatch(request, *args, **kwargs)
 
     def get_content_feed(self):
@@ -330,7 +360,7 @@ class SearchView (SearcherMixin,
         Generates the actual HttpResponse to send back to the user.
         """
         context = super(SearchView, self).get_context_data(**kwargs)
-        context['form'] = self.search_view.form
+        context['form'] = self.form
 
         page_obj = context.get('page_obj', None)
         query_params = self.request.GET.copy()
@@ -355,8 +385,8 @@ class SearchView (SearcherMixin,
         context['file_types'] = get_or_cache('search_file_types',
             lambda: legfile_choices('type'))
         context['sponsors'] = get_or_cache('search_sponsors',
-            lambda: [(member.name, member.name)
-                     for member in CouncilMember.objects.all().order_by('name')])
+            lambda: [(member.real_name, member.real_name)
+                     for member in CouncilMember.objects.all().order_by('real_name')])
         
         log.debug(context)
         return context
@@ -423,3 +453,12 @@ def legfile_choices(field):
     values = [(value_obj[field], value_obj[field])
           for value_obj in value_objs]
     return values
+
+
+class SiteMapView (views.TemplateView):
+    template_name = 'councilmatic/sitemap.xml'
+
+    def get_context_data(self, **kwargs):
+        kwargs['legfiles'] = LegFile.objects.all()
+        kwargs['councilmembers'] = CouncilMember.objects.all()
+        return super(SiteMapView, self).get_context_data(**kwargs)

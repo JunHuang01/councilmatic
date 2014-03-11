@@ -31,7 +31,12 @@ virtual environment, but it's not strictly necessary).
 
     $ pip install -r requirements.txt
 
+
 This file might not fully finish installing; if you get a hang-up on `pdfminer`, try [installing it manually](http://www.unixuser.org/~euske/python/pdfminer/#download) then re-run `pip install -r requirements.txt`.
+
+Be sure to also install the scraper library for your city's legislative
+management system. For cities using Granicus's latest version of Legistar,
+this will be @fgregg's https://github.com/fgregg/legistar-scrape.
 
 Non-Python requirements include:
 

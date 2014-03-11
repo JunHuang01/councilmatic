@@ -17,8 +17,6 @@ license = 'BSD'
 dependency_links = [
     'git+git://github.com/mjumbewu/pysolr.git@056f4e2d#egg=pysolr-3.0.6',
     'git+git://github.com/toastdriven/django-haystack.git@b9c9e47#egg=django-haystack-2.0.0',
-    'git+git://github.com/fgregg/legistar-scrape@42b35fe#egg=legistar-scrape-0.1',
-    'git+git://github.com/abielr/mechanize@813ba36#egg=mechanize-0.2.6',
 #    'https://bitbucket.org/ubernostrum/django-registration/get/default.tar.gz#egg=django-registration-dev',
     'git+git://github.com/mjumbewu/django-registration@a22ba5a#egg=django-registration-0.9.1-b1'
 ]
@@ -84,15 +82,7 @@ install_requires = [
 # ====================
 
 # Requests, for talking HTTP to things like Google's geocoder
-'requests==0.11.1',
-
-# Scraping
-'legistar-scrape==0.1',
-'BeautifulSoup',
-'BeautifulSoup4',
-'pdfminer',
-'slate',
-'mechanize',
+'requests==2.0.1',
 
 
 # ====================
@@ -100,7 +90,7 @@ install_requires = [
 # ====================
 'django-debug-toolbar==0.9.4',
 #pep8
-'django-nose==1.0',
+'django-nose==1.2',
 'coverage==3.5.1',
 'mock==0.8.0',
 

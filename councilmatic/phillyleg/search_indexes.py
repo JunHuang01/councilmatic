@@ -1,6 +1,7 @@
 import datetime
+from itertools import chain
 from haystack import indexes
-from phillyleg.models import LegFile, LegMinutes
+from phillyleg.models import LegFile, LegMinutes, LegFileMetaData
 
 
 class LegislationIndex(indexes.SearchIndex, indexes.Indexable):
@@ -20,10 +21,26 @@ class LegislationIndex(indexes.SearchIndex, indexes.Indexable):
         return LegFile
 
     def prepare_sponsors(self, leg):
-        return [sponsor.name for sponsor in leg.sponsors.all()]
+        return (
+            [sponsor.real_name for sponsor in leg.sponsors.all()] +
+            [alias.name for alias in chain(*(sponsor.aliases.all() for sponsor in leg.sponsors.all()))]
+        )
 
     def prepare_topics(self, leg):
-	return [topic.topic for topic in leg.metadata.topics.all()]
+        try:
+            return [topic.topic for topic in leg.metadata.topics.all()]
+        except LegFileMetaData.DoesNotExist:
+            # The only time this should happen is when the legfile is first
+            # saved. A signal gets sent that updates the index for the object
+            # before the legfile's metadata has a chance to be created. We're
+            # just going to have to accept it in this case.
+            pass
+
+    def index_queryset(self, using=None):
+        return self.get_model().objects.all()\
+            .exclude(title='')\
+            .exclude(title=' ')\
+            .exclude(title=None)
 
     def get_updated_field(self):
         return 'updated_datetime'

@@ -4,11 +4,13 @@ import re
 import utils
 import logging
 from django.conf import settings
+from django.db import transaction
 from django.contrib.gis.db import models
 from django.contrib.gis import geos
 #from django.db import models
 from django.contrib.auth.models import User
 from django.core.urlresolvers import reverse
+from django.utils.translation import ugettext as _
 from phillyleg.management.scraper_wrappers import PhillyLegistarSiteWrapper
 from utils.models import TimestampedModelMixin
 
@@ -26,12 +28,21 @@ class LegKeys(models.Model):
 # Legislative File models
 #
 
+class CouncilMemberAlias (models.Model):
+    member = models.ForeignKey('CouncilMember', related_name='aliases')
+    name = models.CharField(max_length=100, help_text=_('A name by which the council member is referred to in legislation'))
+
+    def __unicode__(self):
+        return self.name
+
+
 class CouncilMember(TimestampedModelMixin, models.Model):
-    name = models.CharField(max_length=100)
-    title = models.CharField(max_length=255, default='')
+    real_name = models.CharField(max_length=100, help_text=_('The council member\'s real name'))
+    title = models.CharField(max_length=255, default='', blank=True)
     headshot = models.CharField(max_length=255,
         # Path to councilmember image, relative to static files dir
-        default='phillyleg/noun_project_416.png')
+        default='phillyleg/noun_project_416.png',
+        help_text=_('Path to the image of the councilmember, relative to the static folder'))
     districts = models.ManyToManyField('CouncilDistrict', through='CouncilMemberTenure', related_name='representatives')
 
     NOT_YET_SET = object()
@@ -70,7 +81,7 @@ class CouncilMember(TimestampedModelMixin, models.Model):
         return (tenure is not None and tenure.at_large)
 
     def __unicode__(self):
-        return self.name.lstrip("Councilmember")
+        return self.real_name.lstrip("Councilmember")
 
 
 class CouncilMemberTenure(TimestampedModelMixin, models.Model):
@@ -248,46 +259,56 @@ class LegFile(TimestampedModelMixin, models.Model):
         metadata for the legislative file as well.
 
         """
-        super(LegFile, self).save(*args, **kwargs)
+        try:
+            # We don't want the legfile to be saved without its metadata, so
+            # wrap this whole thing in a transaction.
+            sid = transaction.savepoint()
 
-        metadata = LegFileMetaData.objects.get_or_create(legfile=self)[0]
+            super(LegFile, self).save(*args, **kwargs)
 
-        if update_words:
-            # Add the unique words to the metadata
-            metadata.words.clear()
-            unique_words = self.unique_words()
-            for word in unique_words:
-                md_word = MetaData_Word.objects.get_or_create(value=word)[0]
-                metadata.words.add(md_word)
+            metadata = LegFileMetaData.objects.get_or_create(legfile=self)[0]
 
-        if update_locations:
-            # Add the unique locations to the metadata
-            metadata.locations.clear()
-            locations = self.addresses()
-            for location in locations:
-                try:
-                    md_location = MetaData_Location.objects.get_or_create(
-                        address=location[0]
-                    )[0]
-                except MetaData_Location.CouldNotBeGeocoded:
-                    continue
+            if update_words:
+                # Add the unique words to the metadata
+                metadata.words.clear()
+                unique_words = self.unique_words()
+                for word in unique_words:
+                    md_word = MetaData_Word.objects.get_or_create(value=word)[0]
+                    metadata.words.add(md_word)
 
-                metadata.locations.add(md_location)
+            if update_locations:
+                # Add the unique locations to the metadata
+                metadata.locations.clear()
+                locations = self.addresses()
+                for location in locations:
+                    try:
+                        md_location = MetaData_Location.objects.get_or_create(
+                            matched_text=location[0]
+                        )[0]
+                    except MetaData_Location.CouldNotBeGeocoded:
+                        continue
 
-        if update_mentions:
-            # Add the mentioned files to the metadata
-            metadata.mentioned_legfiles.clear()
-            for mentioned_legfile in self.mentioned_legfiles():
-                metadata.mentioned_legfiles.add(mentioned_legfile)
+                    metadata.locations.add(md_location)
 
-        if update_topics:
-            # Add topics to the metadata
-            metadata.topics.clear()
-            for topic in self.topics():
-                t = MetaData_Topic.objects.get_or_create(topic=topic)[0]
-                metadata.topics.add(t)
+            if update_mentions:
+                # Add the mentioned files to the metadata
+                metadata.mentioned_legfiles.clear()
+                for mentioned_legfile in self.mentioned_legfiles():
+                    metadata.mentioned_legfiles.add(mentioned_legfile)
 
-        metadata.save()
+            if update_topics:
+                # Add topics to the metadata
+                metadata.topics.clear()
+                for topic in self.topics():
+                    t = MetaData_Topic.objects.get_or_create(topic=topic)[0]
+                    metadata.topics.add(t)
+
+            metadata.save()
+
+            transaction.savepoint_commit(sid)
+        except:
+            transaction.savepoint_rollback(sid)
+            raise
 
     def get_data_source(self):
         return PhillyLegistarSiteWrapper()
@@ -406,7 +427,7 @@ class LegMinutes(TimestampedModelMixin, models.Model):
             locations = self.addresses()
             for location in locations:
                 md_location = MetaData_Location.objects.get_or_create(
-                    address=location['address']
+                    matched_text=location['address']
                 )[0]
                 metadata.locations.add(md_location)
 
@@ -449,14 +470,15 @@ class MetaData_Word (models.Model):
 
 
 class MetaData_Location (TimestampedModelMixin, models.Model):
-    address = models.CharField(max_length=2048, unique=True)
+    matched_text = models.CharField(max_length=2048, unique=True)
+    address = models.CharField(max_length=2048, default='')
     geom = models.PointField(null=True)
     valid = models.BooleanField(default=True, blank=True)
 
     objects = models.GeoManager()
 
     def __unicode__(self):
-        return '{0}{1}'.format(self.address, settings.LEGISLATION['ADDRESS_SUFFIX'])
+        return '{0} ({1})'.format(self.matched_text, self.address)
 
     def save(self, *args, **kwargs):
         if not self.id and not self.geom:
@@ -468,15 +490,16 @@ class MetaData_Location (TimestampedModelMixin, models.Model):
         pass
 
     def geocode(self):
-        gc = utils.geocode(self.address, settings.LEGISLATION['ADDRESS_BOUNDS'])
+        gc = utils.geocode(self.matched_text, settings.LEGISLATION['ADDRESS_BOUNDS'])
 
         if gc and gc['status'] == 'OK' and settings.LEGISLATION['ADDRESS_SUFFIX'] in gc['results'][0]['formatted_address']:
+            self.address = gc['results'][0]['formatted_address']
             x = float(gc['results'][0]['geometry']['location']['lng'])
             y = float(gc['results'][0]['geometry']['location']['lat'])
             self.geom = geos.Point(x, y)
         else:
-            log.debug('Could not geocode the address "%s"' % self.address)
-            raise self.CouldNotBeGeocoded(self.address)
+            log.debug('Could not geocode the address "%s"' % self.matched_text)
+            raise self.CouldNotBeGeocoded(self.matched_text)
 
 class MetaData_Topic (models.Model):
     topic = models.CharField(max_length=128, unique=True)

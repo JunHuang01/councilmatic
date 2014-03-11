@@ -58,15 +58,7 @@ git+git://github.com/mwieler/django-registration-1.5.git#egg=django-registration
 # ====================
 
 # Requests, for talking HTTP to things like Google's geocoder
-requests==0.11.1
-
-# Scraping
-git+git://github.com/fgregg/legistar-scrape#egg=legistar-scrape
-BeautifulSoup
-BeautifulSoup4
-pdfminer
-slate
-git+https://github.com/abielr/mechanize.git#egg=mechanize
+requests==2.0.1
 
 
 # ====================
@@ -74,7 +66,7 @@ git+https://github.com/abielr/mechanize.git#egg=mechanize
 # ====================
 django-debug-toolbar==0.9.4
 #pep8
-django-nose==1.0
+django-nose==1.2
 coverage==3.5.1
 mock==0.8.0
 

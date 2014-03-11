@@ -1,13 +1,14 @@
 import json
 import logging
 from datetime import date, time, datetime
+from django.http import QueryDict
 from collections import defaultdict
 from itertools import chain
 from itertools import product
 from urllib import urlencode
 
-from subscriptions.feeds import ContentFeed
-from subscriptions.feeds import ContentFeedLibrary
+from councilmatic.subscriptions.feeds import ContentFeed
+from councilmatic.subscriptions.feeds import ContentFeedLibrary
 from phillyleg.models import LegFile
 from phillyleg.models import LegMinutes
 from haystack.query import SearchQuerySet
@@ -95,7 +96,7 @@ class LegislationUpdatesFeed (ContentFeed):
 
 from django.dispatch import receiver
 from django.db.models.signals import post_save
-from subscriptions.models import Subscriber
+from councilmatic.subscriptions.models import Subscriber
 
 @receiver(post_save, sender=Subscriber)
 def create_bookmarks_subscription_for_subscriber(sender, **kwargs):
@@ -151,7 +152,9 @@ class SearchResultsFeed (ContentFeed):
         specific.  Just keep that in mind.
 
         """
-        if isinstance(search_filter, dict):
+        if isinstance(search_filter, QueryDict):
+            self.filter = dict((key, lval) for key, lval in search_filter.iterlists())
+        elif isinstance(search_filter, dict):
             self.filter = search_filter
         elif search_filter is not None:
             self.filter = json.loads(search_filter)
@@ -189,6 +192,8 @@ class SearchResultsFeed (ContentFeed):
         return qs.order_by('order_date')
 
     def get_changes_to(self, item, datetime):
+        if item.object is None: return {}, item.order_date
+
         if item.model_name == 'legfile':
             return {'Title': item.object.title}, item.order_date
         elif item.model_name == 'legminutes':
@@ -213,9 +218,15 @@ class SearchResultsFeed (ContentFeed):
 
         label += 'legislation'
 
-        if 'q' in self.filter:
-            is_plural = (' ' in self.filter['q'])
-            label += ' containing the keyword' + ('s' if is_plural else '') + ' "' + self.filter['q'] + '"'
+        if 'q' in self.filter and self.filter['q']:
+            keywords = self.filter['q'][0]
+            if keywords:
+                is_plural = (' ' in keywords)
+                label += ' containing the keyword' + ('s' if is_plural else '') + ' "' + keywords + '"'
+
+        if 'topics' in self.filter:
+            is_plural = (len(self.filter['topics']) > 1)
+            label += ' with the topic' + ('s ' if is_plural else ' ') + ' or '.join(self.filter['topics'])
 
         if 'sponsors' in self.filter:
             label += ' sponsored by ' + ' or '.join(self.filter['sponsors'])
